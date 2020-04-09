@@ -1,10 +1,14 @@
 '''
 Copyright (c) 2014 Valera Likhosherstov <v.lihosherstov@gmail.com>
 dns message structures
-'''
-import struct
-import random
 
+
+2020 Nikos Ftylitakis <nikos.ftylitakis@insigh.io>
+- code edits to make the library MicroPython compatible.
+- addition of helper function (DNSMessageFormat.get_results and dns_resolve)
+'''
+import ustruct as struct
+import uos
 
 def pack(value):
     '''packs unsigned short
@@ -30,7 +34,7 @@ def decode_string(message, offset):
                 offset = index + 2
             index = next ^ (3<<14)
         else:
-            result += message[index + 1:index + 1 + 
+            result += message[index + 1:index + 1 +
                     value].decode('utf-8') + '.'
             index += value + 1
     if offset == 0:
@@ -42,7 +46,7 @@ query_type_names = { 1:'A', 2:'NS', 5:'CNAME', 15:'MX', 28:'AAAA' }
 opcodes = { 0:'QUERY', 1:'IQUERY', 2:'STATUS' }
 query_class_names = { 1:'IN' }
 message_types = { 0:'QUERY', 1:'RESPONSE' }
-responce_code_names = { 0:'No error', 1:'Format error', 
+responce_code_names = { 0:'No error', 1:'Format error',
 2:'Server failure', 3:'Name error', 4:'Not implemented', 5:'Refused' }
 
 
@@ -78,7 +82,8 @@ class MessageHeader:
     def generate_ID(self):
         '''generate random message ID
         '''
-        return random.randint(0, 65535)
+        #2 bytes
+        return int.from_bytes(uos.urandom(2),"big")
 
     def set_question_header(self, recursion_desired):
         '''set header for request
@@ -129,13 +134,13 @@ class MessageHeader:
         '''
         print('    Message ID: {0}'.format(hex(self.messageID)))
         print('    Query/Responce: {0}'.format(message_types[self.qr]))
-        print('    Opcode: {0} ({1})'.format(self.opcode, 
+        print('    Opcode: {0} ({1})'.format(self.opcode,
             opcodes[self.opcode]))
         print('    Authoritative Answer: {0}'.format(bool(self.aa)))
         print('    TrunCation: {0}'.format(bool(self.tc)))
         print('    Recursion Desired: {0}'.format(bool(self.rd)))
         print('    Recursion Available: {0}'.format(bool(self.ra)))
-        print('    Responce Code: {0} ({1})'.format(self.rcode, 
+        print('    Responce Code: {0} ({1})'.format(self.rcode,
             responce_code_names[self.rcode]))
         print('    Questions: {0}'.format(self.qd_count))
         print('    Answers: {0}'.format(self.an_count))
@@ -157,7 +162,7 @@ class DNSQuestion:
         self.type = unpack(message[offset:offset + 2])
         self.request_class = unpack(message[offset + 2:offset + 4])
         return offset + 4
-    
+
 
     def set_question(self, name, IPv6):
         '''set question
@@ -224,7 +229,7 @@ class AAAAResourceData:
         result = ''
         for byte in data:
             result += str(hex(256 + byte))[3:]
-        return result 
+        return result
 
     def __init__(self, data):
         self.data = data
@@ -251,7 +256,7 @@ class NSResourceData:
     '''resource data class
     '''
 
-    
+
     def __init__(self, message, offset):
         self.name = decode_string(message, offset)[1]
 
@@ -274,7 +279,7 @@ class MXResourceData:
     def print(self):
         '''for debug mode
         '''
-        print('    MX: {0} {1}'.format(self.preference, 
+        print('    MX: {0} {1}'.format(self.preference,
                 self.mail_exchanger))
 
 
@@ -419,3 +424,42 @@ class DNSMessageFormat:
         for answer in self.answers:
             if answer.type == 1 or answer.type == 28:
                 print(answer.resource_data.ip)
+
+    def get_result(self):
+        '''return a list of resolved IPs
+        '''
+        list=[]
+        for answer in self.answers:
+            if answer.type == 1 or answer.type == 28:
+                list.append(answer.resource_data.ip)
+        return list
+
+def dns_resolve(socket, url, dns_server, ipv6=True, debug_mode=False):
+    format = DNSMessageFormat()
+    query = format.encode(url, True, ipv6)
+
+    socket.sendto(query, (dns_server, 53))
+
+    try:
+        (response, address) = socket.recvfrom(1024)
+    except Exception:
+        print('Time Out.')
+
+    if(response != None):
+        format.decode(response)
+
+        if debug_mode:
+            print('################# RESPONCE ##################')
+            format.print()
+
+        if len(format.answers) > 0:
+            if debug_mode:
+                print('############################################################')
+            return format.get_result()
+        # elif not recursion_desired:
+        #     for rr in format.additional_RRs:
+        #         if self.connect_server(rr.resource_data.ip):
+        #             ipv6 = (rr.type == 28)
+        #             self.send_query(request, recursion_desired=False,
+        #                 debug_mode=debug_mode, IPv6=ipv6)
+    return []
