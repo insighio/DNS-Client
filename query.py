@@ -42,12 +42,15 @@ def decode_string(message, offset):
     result = result[:-1]
     return (offset, result)
 
-query_type_names = { 1:'A', 2:'NS', 5:'CNAME', 15:'MX', 28:'AAAA' }
+query_type_names = { 1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 12:'PTR', 15:'MX',
+                    28:'AAAA', 33:'SRV', 251:'IXFR', 252:'AXFR', 255:'All' }
 opcodes = { 0:'QUERY', 1:'IQUERY', 2:'STATUS' }
 query_class_names = { 1:'IN' }
 message_types = { 0:'QUERY', 1:'RESPONSE' }
 responce_code_names = { 0:'No error', 1:'Format error',
-2:'Server failure', 3:'Name error', 4:'Not implemented', 5:'Refused' }
+                        2:'Server failure', 3:'Name error', 4:'Not implemented',
+                        5:'Refused', 6:'YXDOMAIN', 7:'YXRRSET',
+                        8:'NXRRSET', 9:'NOTAUTH', 10:'NTOZONE' }
 
 
 class MessageHeader:
@@ -418,20 +421,13 @@ class DNSMessageFormat:
             print('ADDITIONAL_RR[{0}]'.format(i))
             self.additional_RRs[i].print()
 
-    def print_result(self):
-        '''output application result
-        '''
-        for answer in self.answers:
-            if answer.type == 1 or answer.type == 28:
-                print(answer.resource_data.ip)
-
     def get_result(self):
         '''return a list of resolved IPs
         '''
         list=[]
         for answer in self.answers:
             if answer.type == 1 or answer.type == 28:
-                list.append(answer.resource_data.ip)
+                list.append((answer.resource_data.ip, query_type_names[answer.type]))
         return list
 
 def dns_resolve(socket, url, dns_server, ipv6=True, debug_mode=False):
