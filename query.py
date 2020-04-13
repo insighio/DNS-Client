@@ -430,9 +430,9 @@ class DNSMessageFormat:
                 list.append((answer.resource_data.ip, query_type_names[answer.type]))
         return list
 
-def dns_resolve(socket, url, dns_server, ipv6=True, debug_mode=False):
+def dns_resolve(socket, url, dns_server, ipv6=True, debug_mode=False, recursive = True):
     format = DNSMessageFormat()
-    query = format.encode(url, True, ipv6)
+    query = format.encode(url, recursive, ipv6)
 
     socket.sendto(query, (dns_server, 53))
 
@@ -452,10 +452,10 @@ def dns_resolve(socket, url, dns_server, ipv6=True, debug_mode=False):
             if debug_mode:
                 print('############################################################')
             return format.get_result()
-        # elif not recursion_desired:
-        #     for rr in format.additional_RRs:
-        #         if self.connect_server(rr.resource_data.ip):
-        #             ipv6 = (rr.type == 28)
-        #             self.send_query(request, recursion_desired=False,
-        #                 debug_mode=debug_mode, IPv6=ipv6)
+        elif not recursive:
+            for rr in format.additional_RRs:
+                socket.close()
+                ipv6 = (rr.type == 28)
+                self.send_query(request, recursion_desired=False,
+                    debug_mode=debug_mode, IPv6=ipv6)
     return []
